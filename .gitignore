@@ -22,4 +22,10 @@ go.work.sum
 .env
 
 # IDE
-.idea
+.idea/
+
+# OS
+**/.DS_Store
+
+# Audio results
+cgo/testdata/result/
