@@ -16,7 +16,6 @@ type Converter struct {
 }
 
 func NewOpusConverter(config *Config) (*Converter, error) {
-	// TODO (@n.n.semenov): Consider using opus.AppVoIP instead of opus.AppAudio
 	encoder, err := newEncoderWrapper(config.SampleRate, config.NumChannels, opus.AppAudio)
 	if err != nil {
 		return nil, err
