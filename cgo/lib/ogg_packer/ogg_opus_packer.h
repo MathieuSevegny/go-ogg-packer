@@ -1,7 +1,7 @@
 #pragma once
-#include <opus/opus.h>
+#include "opus/opus.h"
 #include <stdint.h>
-#include <ogg/ogg.h>
+#include "ogg/ogg.h"
 #include "ogg_buffer.h"
 
 typedef enum ogg_opus_packer_init_status {

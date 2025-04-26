@@ -1,6 +1,6 @@
 #pragma once
 #include <stdlib.h>
-#include <ogg/ogg.h>
+#include "ogg/ogg.h"
 
 typedef struct buffer_t {
     void *data;
