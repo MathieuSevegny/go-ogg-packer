@@ -3,8 +3,8 @@ package cgo_oggpacker
 import (
 	"fmt"
 
+	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
 	"github.com/paveldroo/go-ogg-packer/opus"
-	"gitlab.tcsbank.ru/speech/libanysound/ogg_packer"
 )
 
 type AudioBufferWriter struct {
