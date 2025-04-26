@@ -9,4 +9,4 @@ env:
 tasks:
   test:
     cmds:
-      - go test github.com/paveldroo/go-ogg-packer/cgo -run "TestOGGPacker"
+      - go test github.com/paveldroo/go-ogg-packer/cgo -run "TestOggPacker"

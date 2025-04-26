@@ -73,9 +73,9 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		panic(err.Error())
 	}
 
-	p.streamFlush()
+	p.StreamFlush()
 	p.addTags()
-	p.streamFlush()
+	p.StreamFlush()
 
 	return &p
 }
@@ -179,7 +179,7 @@ func (p *OggPacker) addTags() error {
 	return nil
 }
 
-func (p *OggPacker) streamFlush() {
+func (p *OggPacker) StreamFlush() {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -194,6 +194,7 @@ func (p *OggPacker) streamFlush() {
 
 		p.Buffer.addData(page)
 	}
+	fmt.Println(p.Buffer.Data)
 }
 
 func header(channelCount uint8, sampleRate uint32) []byte {
