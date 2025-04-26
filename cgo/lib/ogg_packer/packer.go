@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -72,6 +73,10 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		panic(err.Error())
 	}
 
+	p.streamFlush()
+	p.addTags()
+	p.streamFlush()
+
 	return &p
 }
 
@@ -99,6 +104,49 @@ func (p *OggPacker) addHeader() error {
 	return nil
 }
 
+func (p *OggPacker) addTags() error {
+	tags := make([]byte, 9)
+	copy(tags, []byte("OpusTags"))
+
+	cTags := C.malloc(C.size_t(len(tags)))
+	defer C.free(cTags)
+
+	ptr := (*[1 << 30]byte)(cTags)[:len(tags):len(tags)]
+	copy(ptr, tags)
+
+	var packet C.ogg_packet
+	packet.packet = (*C.uchar)(cTags)
+	packet.bytes = C.long(len(tags))
+	packet.b_o_s = C.long(0)
+	packet.e_o_s = C.long(0) // Not end of stream
+	packet.granulepos = C.ogg_int64_t(0)
+	packet.packetno = C.ogg_int64_t(p.PacketNo)
+	p.PacketNo++
+
+	if resultCode = C.ogg_stream_packetin(p.StreamState, &packet); resultCode == C.int(-1) {
+		return fmt.Errorf("failed to add tags packet to ogg stream")
+	}
+
+	return nil
+}
+
+func (p *OggPacker) streamFlush() {
+	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
+	defer C.free(unsafe.Pointer(page))
+
+	for {
+		resultCode = C.ogg_stream_flush(p.StreamState, page)
+		if resultCode == C.int(-1) {
+			panic("ogg stream flush failed")
+		}
+		if resultCode == C.int(0) {
+			break
+		}
+
+		p.Buffer.addData(page)
+	}
+}
+
 func header(channelCount uint8, sampleRate uint32) []byte {
 	header := make([]byte, 19)
 	copy(header, []byte("OpusHead"))
@@ -113,4 +161,17 @@ func header(channelCount uint8, sampleRate uint32) []byte {
 	header[18] = 0
 
 	return header
+}
+
+func (b *Buffer) addData(page *C.ogg_page) {
+	var header []byte
+	var body []byte
+	if page.header_len > 0 {
+		header = C.GoBytes(unsafe.Pointer(page.header), C.int(page.header_len))
+	}
+	if page.body_len > 0 {
+		body = C.GoBytes(unsafe.Pointer(page.body), C.int(page.body_len))
+	}
+	b.Data = append(b.Data, header...)
+	b.Data = append(b.Data, body...)
 }
