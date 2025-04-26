@@ -73,11 +73,60 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		panic(err.Error())
 	}
 
-	p.streamFlush()
+	p.StreamFlush()
 	p.addTags()
-	p.streamFlush()
+	p.StreamFlush()
 
 	return &p
+}
+
+func (p *OggPacker) AddChunk(data []byte, eos bool, samplesCount int) error {
+	eosNumber := 0 // not end of stream
+	if eos {
+		eosNumber = 1 // end of stream
+	}
+
+	bufLen := maxFrameSize * int16(p.ChannelCount)
+	cBufLen := C.short(bufLen)
+
+	var numSamplesPerChannel C.int
+	if samplesCount < 0 {
+		numSamplesPerChannel = C.opus_decode(
+			p.OpusDecoder,
+			(*C.uchar)(unsafe.Pointer(&data[0])),
+			C.int(len(data)),
+			&cBufLen,
+			maxFrameSize,
+			0,
+		)
+		if numSamplesPerChannel < 0 {
+			panic("failed to count numSamplesPerChannel")
+		}
+	} else {
+		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.SampleRate * uint32(p.ChannelCount)))
+	}
+
+	cData := C.malloc(C.size_t(len(data)))
+	defer C.free(cData)
+
+	ptr := (*[1 << 30]byte)(cData)[:len(data):len(data)]
+	copy(ptr, data)
+
+	var packet C.ogg_packet
+	packet.packet = (*C.uchar)(cData)
+	packet.bytes = C.long(len(data))
+	packet.b_o_s = C.long(0)
+	packet.e_o_s = C.long(eosNumber)
+	packet.granulepos = C.ogg_int64_t(p.GranulePos)
+	packet.packetno = C.ogg_int64_t(p.PacketNo)
+	p.PacketNo++
+	p.GranulePos += int64(numSamplesPerChannel)
+
+	if resultCode = C.ogg_stream_packetin(p.StreamState, &packet); resultCode == C.int(-1) {
+		return fmt.Errorf("failed to add chunk packet to ogg stream")
+	}
+
+	return nil
 }
 
 func (p *OggPacker) addHeader() error {
@@ -130,7 +179,7 @@ func (p *OggPacker) addTags() error {
 	return nil
 }
 
-func (p *OggPacker) streamFlush() {
+func (p *OggPacker) StreamFlush() {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -145,6 +194,7 @@ func (p *OggPacker) streamFlush() {
 
 		p.Buffer.addData(page)
 	}
+	fmt.Println(p.Buffer.Data)
 }
 
 func header(channelCount uint8, sampleRate uint32) []byte {
