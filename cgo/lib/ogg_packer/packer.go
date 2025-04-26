@@ -43,20 +43,7 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		ReadIdx: 0,
 	}
 
-	p := OggPacker{
-		Buffer:       buf,
-		ChannelCount: channelCount,
-		SampleRate:   sampleRate,
-		PacketNo:     1,
-		GranulePos:   0,
-	}
-
-	serialNo := rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()
-
-	if resultCode = C.ogg_stream_init(p.StreamState, C.int(serialNo)); resultCode == C.int(-1) {
-		panic("ogg stream init failed")
-		WE ARE FAILING HERE - TRY TO INSPECT WHAT'S WRONG
-	}
+	var streamState C.ogg_stream_state
 
 	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(channelCount), &resultCode)
 	if resultCode == C.int(-1) {
@@ -65,7 +52,21 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 	if opusDecoder == nil {
 		panic("opusDecoder empty!")
 	}
-	p.OpusDecoder = opusDecoder
+
+	p := OggPacker{
+		ChannelCount: channelCount,
+		SampleRate:   sampleRate,
+		PacketNo:     1,
+		GranulePos:   0,
+		StreamState:  &streamState,
+		Buffer:       buf,
+		OpusDecoder:  opusDecoder,
+	}
+
+	serialNo := rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()
+	if resultCode = C.ogg_stream_init(p.StreamState, C.int(serialNo)); resultCode == C.int(-1) {
+		panic("ogg stream init failed")
+	}
 
 	if err := p.addHeader(); err != nil {
 		panic(err.Error())
