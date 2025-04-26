@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
 	"github.com/paveldroo/go-ogg-packer/opus"
-	"gitlab.tcsbank.ru/speech/libanysound/ogg_packer"
 )
 
 func TestOGGPacker(t *testing.T) {
