@@ -149,6 +149,6 @@ void ogg_opus_packer_destroy(ogg_opus_packer_t *s) {
     ogg_stream_clear(&s->stream_state);
     if (s->buffer)
         buffer_reset(s->buffer);
-        buffer_destroy(s->buffer);
+    buffer_destroy(s->buffer);
     free(s);
 }
