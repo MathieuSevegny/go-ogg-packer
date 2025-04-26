@@ -1,4 +1,6 @@
 # go-ogg-packer
+**!Library is incomplete, work in progress.**
+
 Pack your opus, alaw, linear16 data into ogg container using Go
 
 Project plan:
