@@ -8,8 +8,8 @@ import (
 	"time"
 
 	packer "github.com/paveldroo/go-ogg-packer"
-	writer "github.com/paveldroo/go-ogg-packer/buffer_writer"
-	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
+	writer "github.com/paveldroo/go-ogg-packer/tests/buffer_writer"
+	"github.com/paveldroo/go-ogg-packer/tests/buffer_writer/opus_tools"
 )
 
 const baseFilename = "testdata/base.opus"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	packer "github.com/paveldroo/go-ogg-packer"
-	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
+	"github.com/paveldroo/go-ogg-packer/tests/buffer_writer/opus_tools"
 )
 
 type AudioBufferWriter struct {
