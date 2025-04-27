@@ -1,12 +1,12 @@
-package cgo_oggpacker
+package writer
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
 	"github.com/paveldroo/go-ogg-packer/opus"
+	"github.com/paveldroo/go-ogg-packer/packer"
 )
 
 func TestOggPacker(t *testing.T) {
@@ -15,7 +15,7 @@ func TestOggPacker(t *testing.T) {
 		t.Fatalf("create opus converter: %s", err.Error())
 	}
 
-	packer := ogg_packer.NewPacker(1, sampleRate)
+	packer := packer.NewPacker(1, sampleRate)
 	if err != nil {
 		t.Fatalf("create ogg packer wrapper: %s", err.Error())
 	}
