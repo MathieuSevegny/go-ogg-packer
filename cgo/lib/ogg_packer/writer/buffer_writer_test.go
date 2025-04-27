@@ -1,7 +1,9 @@
 package writer
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
 	"github.com/paveldroo/go-ogg-packer/opus"
@@ -37,12 +39,10 @@ func TestOggPacker(t *testing.T) {
 		i = end
 	}
 
-	packer.StreamFlush()
+	audioContent, err := audioBuffer.getResult()
+	if err != nil {
+		t.Fatalf("get result from audio buffer: %s", err.Error())
+	}
 
-	// audioContent, err := audioBuffer.getResult()
-	// if err != nil {
-	// 	t.Fatalf("get result from audio buffer: %s", err.Error())
-	// }
-
-	// mustWriteOpusFile(fmt.Sprintf("testdata/result/ogg_packer_result_%d.opus", time.Now().UnixNano()), audioContent)
+	mustWriteOpusFile(fmt.Sprintf("testdata/result/ogg_packer_result_%d.opus", time.Now().UnixNano()), audioContent)
 }

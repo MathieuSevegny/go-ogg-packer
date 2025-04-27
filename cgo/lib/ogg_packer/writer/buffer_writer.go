@@ -39,26 +39,26 @@ func (s *AudioBufferWriter) sendS16Chunk(chunk []int16) error { //nolint:cyclop 
 	return nil
 }
 
-// func (s *AudioBufferWriter) getResult() ([]byte, error) {
-// 	defer s.oggPacker.Close()
+func (s *AudioBufferWriter) getResult() ([]byte, error) {
+	defer s.oggPacker.Close()
 
-// 	if err := s.flushLastS16Buffer(); err != nil {
-// 		return nil, fmt.Errorf("flush buffer: %w", err)
-// 	}
+	if err := s.flushLastS16Buffer(); err != nil {
+		return nil, fmt.Errorf("flush buffer: %w", err)
+	}
 
-// 	oggPages, err := s.oggPacker.ReadPages()
-// 	if err != nil {
-// 		return nil, fmt.Errorf("read pages: %w", err)
-// 	}
-// 	flushedOggPages, err := s.oggPacker.FlushPages()
-// 	if err != nil {
-// 		return nil, fmt.Errorf("flush pages: %w", err)
-// 	}
-// 	oggPages = append(oggPages, flushedOggPages...)
-// 	s.result = oggPages
+	oggPages, err := s.oggPacker.ReadPages()
+	if err != nil {
+		return nil, fmt.Errorf("read pages: %w", err)
+	}
+	flushedOggPages, err := s.oggPacker.FlushPages()
+	if err != nil {
+		return nil, fmt.Errorf("flush pages: %w", err)
+	}
+	oggPages = append(oggPages, flushedOggPages...)
+	s.result = oggPages
 
-// 	return s.result, nil
-// }
+	return s.result, nil
+}
 
 func (s *AudioBufferWriter) flushLastS16Buffer() error {
 	defer func() {
