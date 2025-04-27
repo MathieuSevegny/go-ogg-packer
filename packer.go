@@ -23,27 +23,17 @@ const (
 
 var resultCode C.int
 
-type Buffer struct {
-	Data    []byte
-	ReadIdx uint64
-}
-
 type Packer struct {
 	ChannelCount uint8
 	SampleRate   uint32
 	PacketNo     int64
 	GranulePos   int64
 	StreamState  *C.ogg_stream_state
-	Buffer       Buffer
+	Buffer       []byte
 	OpusDecoder  *C.OpusDecoder
 }
 
 func NewPacker(channelCount uint8, sampleRate uint32) *Packer {
-	buf := Buffer{
-		Data:    make([]byte, 0, initBufferSize),
-		ReadIdx: 0,
-	}
-
 	var streamState C.ogg_stream_state
 
 	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(channelCount), &resultCode)
@@ -60,7 +50,7 @@ func NewPacker(channelCount uint8, sampleRate uint32) *Packer {
 		PacketNo:     1,
 		GranulePos:   0,
 		StreamState:  &streamState,
-		Buffer:       buf,
+		Buffer:       make([]byte, 0, initBufferSize),
 		OpusDecoder:  opusDecoder,
 	}
 
@@ -191,10 +181,10 @@ func (p *Packer) ReadPages() ([]byte, error) {
 			break
 		}
 
-		p.Buffer.addData(page)
+		p.addBuffer(page)
 	}
 
-	return p.Buffer.readData(), nil
+	return p.readBuffer(), nil
 }
 
 func (p *Packer) FlushPages() ([]byte, error) {
@@ -210,10 +200,10 @@ func (p *Packer) FlushPages() ([]byte, error) {
 			break
 		}
 
-		p.Buffer.addData(page)
+		p.addBuffer(page)
 	}
 
-	return p.Buffer.readData(), nil
+	return p.readBuffer(), nil
 }
 
 func (p *Packer) streamFlush() {
@@ -229,7 +219,7 @@ func (p *Packer) streamFlush() {
 			break
 		}
 
-		p.Buffer.addData(page)
+		p.addBuffer(page)
 	}
 }
 
@@ -253,7 +243,7 @@ func header(channelCount uint8, sampleRate uint32) []byte {
 	return header
 }
 
-func (b *Buffer) addData(page *C.ogg_page) {
+func (p *Packer) addBuffer(page *C.ogg_page) {
 	var header []byte
 	var body []byte
 	if page.header_len > 0 {
@@ -262,12 +252,12 @@ func (b *Buffer) addData(page *C.ogg_page) {
 	if page.body_len > 0 {
 		body = C.GoBytes(unsafe.Pointer(page.body), C.int(page.body_len))
 	}
-	b.Data = append(b.Data, header...)
-	b.Data = append(b.Data, body...)
+	p.Buffer = append(p.Buffer, header...)
+	p.Buffer = append(p.Buffer, body...)
 }
 
-func (b *Buffer) readData() []byte {
-	d := b.Data
-	b.Data = make([]byte, 0, initBufferSize)
+func (p *Packer) readBuffer() []byte {
+	d := p.Buffer
+	p.Buffer = make([]byte, 0, initBufferSize)
 	return d
 }
