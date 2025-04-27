@@ -33,7 +33,7 @@ type Packer struct {
 	OpusDecoder  *C.OpusDecoder
 }
 
-func NewPacker(channelCount uint8, sampleRate uint32) *Packer {
+func New(channelCount uint8, sampleRate uint32) *Packer {
 	var streamState C.ogg_stream_state
 
 	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(channelCount), &resultCode)
