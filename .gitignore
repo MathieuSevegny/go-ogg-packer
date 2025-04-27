@@ -28,4 +28,4 @@ go.work.sum
 **/.DS_Store
 
 # Audio results
-packer/buffer_writer/testdata/result/
+tests/testdata/result/
