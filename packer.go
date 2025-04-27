@@ -10,6 +10,7 @@ package packer
 import "C"
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"unsafe"
 )
@@ -21,7 +22,10 @@ const (
 	defaultSampleRate = 48000
 )
 
-var resultCode C.int
+var (
+	successExitCode = C.int(0)
+	errorExitCode   = C.int(-1)
+)
 
 type Packer struct {
 	ChannelCount uint8
@@ -33,40 +37,56 @@ type Packer struct {
 	OpusDecoder  *C.OpusDecoder
 }
 
-func New(channelCount uint8, sampleRate uint32) *Packer {
-	var streamState C.ogg_stream_state
-
-	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(channelCount), &resultCode)
-	if resultCode == C.int(-1) {
-		panic("opus decoder creation failed")
-	}
-	if opusDecoder == nil {
-		panic("opusDecoder empty!")
-	}
-
+func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 	p := Packer{
 		ChannelCount: channelCount,
 		SampleRate:   sampleRate,
 		PacketNo:     1,
 		GranulePos:   0,
-		StreamState:  &streamState,
-		Buffer:       make([]byte, 0, initBufferSize),
-		OpusDecoder:  opusDecoder,
+		StreamState:  nil,
+		Buffer:       nil,
+		OpusDecoder:  nil,
 	}
 
-	if resultCode = C.ogg_stream_init(p.StreamState, C.int(serialNo)); resultCode == C.int(-1) {
-		panic("ogg stream init failed")
+	if err := p.Init(); err != nil {
+		return nil, fmt.Errorf("init ogg packer: %w", err)
+	}
+
+	return &p, nil
+}
+
+func (p *Packer) Init() error {
+	var streamState C.ogg_stream_state
+	p.StreamState = &streamState
+
+	var exitCode C.int
+	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(p.ChannelCount), &exitCode)
+	if exitCode == errorExitCode || opusDecoder == nil {
+		return errors.New("create opus decoder failed")
+	}
+	p.OpusDecoder = opusDecoder
+
+	if exitCode := C.ogg_stream_init(p.StreamState, C.int(serialNo)); exitCode == errorExitCode {
+		return errors.New("ogg stream init failed")
 	}
 
 	if err := p.addHeader(); err != nil {
-		panic(err.Error())
+		return fmt.Errorf("add header to ogg stream: %w", err)
 	}
 
-	p.streamFlush()
-	p.addTags()
-	p.streamFlush()
+	if err := p.streamFlush(); err != nil {
+		return fmt.Errorf("stream flush: %w", err)
+	}
 
-	return &p
+	if err := p.addTags(); err != nil {
+		return fmt.Errorf("add tags packet: %w", err)
+	}
+
+	if err := p.streamFlush(); err != nil {
+		return fmt.Errorf("stream flush: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
@@ -75,7 +95,7 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 		eosNumber = 1 // end of stream
 	}
 
-	bufLen := maxFrameSize * int16(p.ChannelCount)
+	bufLen := maxFrameSize * int16(p.ChannelCount) // here should be array as in C sources?
 	cBufLen := C.short(bufLen)
 
 	var numSamplesPerChannel C.int
@@ -89,7 +109,7 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 			0,
 		)
 		if numSamplesPerChannel < 0 {
-			panic("failed to count numSamplesPerChannel")
+			return errors.New("count number of sampler per channel failed")
 		}
 	} else {
 		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.SampleRate * uint32(p.ChannelCount)))
@@ -111,8 +131,8 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 	p.PacketNo++
 	p.GranulePos += int64(numSamplesPerChannel)
 
-	if resultCode = C.ogg_stream_packetin(p.StreamState, &packet); resultCode == C.int(-1) {
-		return fmt.Errorf("failed to add chunk packet to ogg stream")
+	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
+		return errors.New("add packet to ogg stream failed")
 	}
 
 	return nil
@@ -135,8 +155,8 @@ func (p *Packer) addHeader() error {
 	packet.packetno = C.ogg_int64_t(p.PacketNo)
 	p.PacketNo++
 
-	if resultCode = C.ogg_stream_packetin(p.StreamState, &packet); resultCode == C.int(-1) {
-		return fmt.Errorf("failed to add header packet to ogg stream")
+	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
+		return errors.New("add packet to ogg stream failed")
 	}
 
 	return nil
@@ -161,8 +181,8 @@ func (p *Packer) addTags() error {
 	packet.packetno = C.ogg_int64_t(p.PacketNo)
 	p.PacketNo++
 
-	if resultCode = C.ogg_stream_packetin(p.StreamState, &packet); resultCode == C.int(-1) {
-		return fmt.Errorf("failed to add tags packet to ogg stream")
+	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
+		return errors.New("add packet to ogg stream failed")
 	}
 
 	return nil
@@ -173,15 +193,17 @@ func (p *Packer) ReadPages() ([]byte, error) {
 	defer C.free(unsafe.Pointer(page))
 
 	for {
-		resultCode = C.ogg_stream_pageout(p.StreamState, page)
-		if resultCode == C.int(-1) {
-			panic("ogg read pages failed")
+		exitCode := C.ogg_stream_pageout(p.StreamState, page)
+		if exitCode == errorExitCode {
+			return nil, errors.New("read pages from ogg stream failed")
 		}
-		if resultCode == C.int(0) {
+		if exitCode == successExitCode {
 			break
 		}
 
-		p.addBuffer(page)
+		if err := p.addBuffer(page); err != nil {
+			return nil, fmt.Errorf("add page to buffer: %w", err)
+		}
 	}
 
 	return p.readBuffer(), nil
@@ -192,35 +214,41 @@ func (p *Packer) FlushPages() ([]byte, error) {
 	defer C.free(unsafe.Pointer(page))
 
 	for {
-		resultCode = C.ogg_stream_flush(p.StreamState, page)
-		if resultCode == C.int(-1) {
-			panic("flush pages failed")
+		exitCode := C.ogg_stream_flush(p.StreamState, page)
+		if exitCode == errorExitCode {
+			return nil, errors.New("flush pages from ogg stream failed")
 		}
-		if resultCode == C.int(0) {
+		if exitCode == successExitCode {
 			break
 		}
 
-		p.addBuffer(page)
+		if err := p.addBuffer(page); err != nil {
+			return nil, fmt.Errorf("add page to buffer: %w", err)
+		}
 	}
 
 	return p.readBuffer(), nil
 }
 
-func (p *Packer) streamFlush() {
+func (p *Packer) streamFlush() error {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
 	for {
-		resultCode = C.ogg_stream_flush(p.StreamState, page)
-		if resultCode == C.int(-1) {
-			panic("ogg stream flush failed")
+		exitCode := C.ogg_stream_flush(p.StreamState, page)
+		if exitCode == errorExitCode {
+			return errors.New("C-level flush ogg stream failed")
 		}
-		if resultCode == C.int(0) {
+		if exitCode == successExitCode {
 			break
 		}
 
-		p.addBuffer(page)
+		if err := p.addBuffer(page); err != nil {
+			return fmt.Errorf("add page to buffer: %w", err)
+		}
 	}
+
+	return nil
 }
 
 func (p *Packer) Close() {
@@ -243,21 +271,29 @@ func header(channelCount uint8, sampleRate uint32) []byte {
 	return header
 }
 
-func (p *Packer) addBuffer(page *C.ogg_page) {
+func (p *Packer) addBuffer(page *C.ogg_page) error {
 	var header []byte
 	var body []byte
-	if page.header_len > 0 {
-		header = C.GoBytes(unsafe.Pointer(page.header), C.int(page.header_len))
+
+	if page.header_len == 0 {
+		return errors.New("header length should be > 0")
 	}
-	if page.body_len > 0 {
-		body = C.GoBytes(unsafe.Pointer(page.body), C.int(page.body_len))
-	}
+
+	header = C.GoBytes(unsafe.Pointer(page.header), C.int(page.header_len))
 	p.Buffer = append(p.Buffer, header...)
+
+	if page.body_len == 0 {
+		return errors.New("body length should be > 0")
+	}
+
+	body = C.GoBytes(unsafe.Pointer(page.body), C.int(page.body_len))
 	p.Buffer = append(p.Buffer, body...)
+
+	return nil
 }
 
 func (p *Packer) readBuffer() []byte {
-	d := p.Buffer
+	b := p.Buffer
 	p.Buffer = make([]byte, 0, initBufferSize)
-	return d
+	return b
 }
