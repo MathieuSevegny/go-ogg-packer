@@ -12,7 +12,7 @@ const sampleRate = 48000
 const channels = 1
 const wavFilePath = "testdata/demo_48k_1ch.wav"
 
-func S16FromWav() []int16 {
+func s16FromWav() []int16 {
 	d, err := os.ReadFile(wavFilePath)
 	if err != nil {
 		log.Fatalf("open wav file: %s", err.Error())

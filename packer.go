@@ -11,12 +11,11 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
-	"math/rand"
-	"time"
 	"unsafe"
 )
 
 const (
+	serialNo          = 99999 // const for testing similarity in active development phase. Should be `rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()` in real world.
 	initBufferSize    = 4096
 	maxFrameSize      = 5760
 	defaultSampleRate = 48000
@@ -65,7 +64,6 @@ func NewPacker(channelCount uint8, sampleRate uint32) *Packer {
 		OpusDecoder:  opusDecoder,
 	}
 
-	serialNo := rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()
 	if resultCode = C.ogg_stream_init(p.StreamState, C.int(serialNo)); resultCode == C.int(-1) {
 		panic("ogg stream init failed")
 	}

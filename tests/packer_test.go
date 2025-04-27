@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -9,6 +11,8 @@ import (
 	writer "github.com/paveldroo/go-ogg-packer/buffer_writer"
 	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
 )
+
+const baseFilename = "testdata/base.opus"
 
 func TestPacker(t *testing.T) {
 	converter, err := opus_tools.NewOpusConverter(opus_tools.NewDefaultConfig())
@@ -21,7 +25,7 @@ func TestPacker(t *testing.T) {
 		t.Fatalf("create ogg packer wrapper: %s", err.Error())
 	}
 
-	s16 := S16FromWav()
+	s16 := s16FromWav()
 	audioBuffer := writer.NewAudioBuffer(converter, packer)
 
 	for i := 0; i < len(s16); i++ {
@@ -38,5 +42,15 @@ func TestPacker(t *testing.T) {
 		t.Fatalf("get result from audio buffer: %s", err.Error())
 	}
 
-	mustWriteOpusFile(fmt.Sprintf("testdata/result/ogg_packer_result_%d.opus", time.Now().UnixNano()), audioContent)
+	fname := fmt.Sprintf("testdata/result/ogg_packer_result_%d.opus", time.Now().UnixNano())
+	mustWriteOpusFile(fname, audioContent)
+
+	baseData, err := os.ReadFile(baseFilename)
+	if err != nil {
+		t.Fatalf("open base file: %s", err.Error())
+	}
+
+	if !reflect.DeepEqual(baseData, audioContent) {
+		t.Fatal("base data and test data are not equal")
+	}
 }
