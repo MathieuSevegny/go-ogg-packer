@@ -1,11 +1,11 @@
-package ogg_packer
+package packer
 
 /*
 #cgo pkg-config: opus ogg
 #cgo darwin CFLAGS: -I./opus
-#include "ogg_opus_packer.h"
-#include "ogg/ogg.h"
-#include "opus/opus.h"
+#include <stdlib.h>
+#include "../lib/ogg/ogg.h"
+#include "../lib/opus/opus.h"
 */
 import "C"
 import (
@@ -29,7 +29,7 @@ type Buffer struct {
 	ReadIdx uint64
 }
 
-type OggPacker struct {
+type Packer struct {
 	ChannelCount uint8
 	SampleRate   uint32
 	PacketNo     int64
@@ -39,7 +39,7 @@ type OggPacker struct {
 	OpusDecoder  *C.OpusDecoder
 }
 
-func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
+func NewPacker(channelCount uint8, sampleRate uint32) *Packer {
 	buf := Buffer{
 		Data:    make([]byte, 0, initBufferSize),
 		ReadIdx: 0,
@@ -55,7 +55,7 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		panic("opusDecoder empty!")
 	}
 
-	p := OggPacker{
+	p := Packer{
 		ChannelCount: channelCount,
 		SampleRate:   sampleRate,
 		PacketNo:     1,
@@ -81,7 +81,7 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 	return &p
 }
 
-func (p *OggPacker) AddChunk(data []byte, eos bool, samplesCount int) error {
+func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 	eosNumber := 0 // not end of stream
 	if eos {
 		eosNumber = 1 // end of stream
@@ -130,7 +130,7 @@ func (p *OggPacker) AddChunk(data []byte, eos bool, samplesCount int) error {
 	return nil
 }
 
-func (p *OggPacker) addHeader() error {
+func (p *Packer) addHeader() error {
 	header := header(p.ChannelCount, p.SampleRate)
 	cHeader := C.malloc(C.size_t(len(header)))
 	defer C.free(cHeader)
@@ -154,7 +154,7 @@ func (p *OggPacker) addHeader() error {
 	return nil
 }
 
-func (p *OggPacker) addTags() error {
+func (p *Packer) addTags() error {
 	tags := make([]byte, 9)
 	copy(tags, []byte("OpusTags"))
 
@@ -180,7 +180,7 @@ func (p *OggPacker) addTags() error {
 	return nil
 }
 
-func (p *OggPacker) ReadPages() ([]byte, error) {
+func (p *Packer) ReadPages() ([]byte, error) {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -199,7 +199,7 @@ func (p *OggPacker) ReadPages() ([]byte, error) {
 	return p.Buffer.readData(), nil
 }
 
-func (p *OggPacker) FlushPages() ([]byte, error) {
+func (p *Packer) FlushPages() ([]byte, error) {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -218,7 +218,7 @@ func (p *OggPacker) FlushPages() ([]byte, error) {
 	return p.Buffer.readData(), nil
 }
 
-func (p *OggPacker) streamFlush() {
+func (p *Packer) streamFlush() {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -235,7 +235,7 @@ func (p *OggPacker) streamFlush() {
 	}
 }
 
-func (p *OggPacker) Close() {
+func (p *Packer) Close() {
 	// Some optimizer code for destroying objects
 }
 

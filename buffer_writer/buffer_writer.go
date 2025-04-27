@@ -3,20 +3,20 @@ package writer
 import (
 	"fmt"
 
-	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
-	"github.com/paveldroo/go-ogg-packer/opus"
+	packer "github.com/paveldroo/go-ogg-packer"
+	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
 )
 
 type AudioBufferWriter struct {
 	result        []byte
-	opusConverter *opus.Converter
-	oggPacker     *ogg_packer.OggPacker
+	opusConverter *opus_tools.Converter
+	oggPacker     *packer.Packer
 	lastS16Buffer []int16
 }
 
 func NewAudioBuffer(
-	opusConverter *opus.Converter,
-	oggPacker *ogg_packer.OggPacker,
+	opusConverter *opus_tools.Converter,
+	oggPacker *packer.Packer,
 ) *AudioBufferWriter {
 	return &AudioBufferWriter{
 		opusConverter: opusConverter,
@@ -24,7 +24,7 @@ func NewAudioBuffer(
 	}
 }
 
-func (s *AudioBufferWriter) sendS16Chunk(chunk []int16) error { //nolint:cyclop // SIMPLIFY
+func (s *AudioBufferWriter) SendS16Chunk(chunk []int16) error { //nolint:cyclop // SIMPLIFY
 	s.lastS16Buffer = append(s.lastS16Buffer, chunk...)
 	currentOpusPackets, pos, err := s.opusConverter.Encode(s.lastS16Buffer)
 	if err != nil {
@@ -39,7 +39,7 @@ func (s *AudioBufferWriter) sendS16Chunk(chunk []int16) error { //nolint:cyclop 
 	return nil
 }
 
-func (s *AudioBufferWriter) getResult() ([]byte, error) {
+func (s *AudioBufferWriter) GetResult() ([]byte, error) {
 	defer s.oggPacker.Close()
 
 	if err := s.flushLastS16Buffer(); err != nil {

@@ -28,4 +28,4 @@ go.work.sum
 **/.DS_Store
 
 # Audio results
-cgo/testdata/result/
+tests/testdata/result/

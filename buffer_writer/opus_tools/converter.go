@@ -1,4 +1,4 @@
-package opus
+package opus_tools
 
 import (
 	"fmt"

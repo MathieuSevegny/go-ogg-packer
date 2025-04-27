@@ -1,21 +1,22 @@
-package writer
+package tests
 
 import (
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/paveldroo/go-ogg-packer/cgo/lib/ogg_packer"
-	"github.com/paveldroo/go-ogg-packer/opus"
+	packer "github.com/paveldroo/go-ogg-packer"
+	writer "github.com/paveldroo/go-ogg-packer/buffer_writer"
+	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
 )
 
 func TestOggPacker(t *testing.T) {
-	converter, err := opus.NewOpusConverter(opus.NewDefaultConfig())
+	converter, err := opus_tools.NewOpusConverter(opus_tools.NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("create opus converter: %s", err.Error())
 	}
 
-	packer := ogg_packer.NewPacker(1, sampleRate)
+	packer := packer.NewPacker(1, sampleRate)
 	if err != nil {
 		t.Fatalf("create ogg packer wrapper: %s", err.Error())
 	}
@@ -28,18 +29,18 @@ func TestOggPacker(t *testing.T) {
 
 	mustWriteS16File(pcm)
 
-	audioBuffer := NewAudioBuffer(converter, packer)
+	audioBuffer := writer.NewAudioBuffer(converter, packer)
 
 	for i := 0; i < len(s16); i++ {
 		end := i + 2048
 		if end > len(s16) {
 			end = len(s16)
 		}
-		audioBuffer.sendS16Chunk(s16[i:end])
+		audioBuffer.SendS16Chunk(s16[i:end])
 		i = end
 	}
 
-	audioContent, err := audioBuffer.getResult()
+	audioContent, err := audioBuffer.GetResult()
 	if err != nil {
 		t.Fatalf("get result from audio buffer: %s", err.Error())
 	}

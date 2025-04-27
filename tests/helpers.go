@@ -1,4 +1,4 @@
-package cgo_oggpacker
+package tests
 
 import (
 	"bytes"
