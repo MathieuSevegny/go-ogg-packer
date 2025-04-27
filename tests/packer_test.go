@@ -10,7 +10,7 @@ import (
 	"github.com/paveldroo/go-ogg-packer/buffer_writer/opus_tools"
 )
 
-func TestOggPacker(t *testing.T) {
+func TestPacker(t *testing.T) {
 	converter, err := opus_tools.NewOpusConverter(opus_tools.NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("create opus converter: %s", err.Error())
