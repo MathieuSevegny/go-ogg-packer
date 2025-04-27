@@ -10,13 +10,13 @@ import (
 type AudioBufferWriter struct {
 	result        []byte
 	opusConverter *opus.Converter
-	oggPacker     *ogg_packer.Packer
+	oggPacker     *ogg_packer.OggPacker
 	lastS16Buffer []int16
 }
 
 func NewAudioBuffer(
 	opusConverter *opus.Converter,
-	oggPacker *ogg_packer.Packer,
+	oggPacker *ogg_packer.OggPacker,
 ) *AudioBufferWriter {
 	return &AudioBufferWriter{
 		opusConverter: opusConverter,

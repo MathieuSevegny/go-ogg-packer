@@ -15,7 +15,7 @@ func TestOggPacker(t *testing.T) {
 		t.Fatalf("create opus converter: %s", err.Error())
 	}
 
-	packer, err := ogg_packer.New(sampleRate, 1)
+	packer := ogg_packer.NewPacker(1, sampleRate)
 	if err != nil {
 		t.Fatalf("create ogg packer wrapper: %s", err.Error())
 	}
