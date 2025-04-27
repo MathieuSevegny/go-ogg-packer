@@ -22,13 +22,6 @@ func TestOggPacker(t *testing.T) {
 	}
 
 	s16 := S16FromWav()
-	pcm, err := Int16SliceToByteSlice(s16)
-	if err != nil {
-		t.Fatalf("convert int16 to byte: %s", err.Error())
-	}
-
-	mustWriteS16File(pcm)
-
 	audioBuffer := writer.NewAudioBuffer(converter, packer)
 
 	for i := 0; i < len(s16); i++ {
