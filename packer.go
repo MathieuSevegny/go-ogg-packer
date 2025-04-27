@@ -4,8 +4,8 @@ package packer
 #cgo pkg-config: opus ogg
 #cgo darwin CFLAGS: -I./opus
 #include <stdlib.h>
-#include "../lib/ogg/ogg.h"
-#include "../lib/opus/opus.h"
+#include "lib/ogg/ogg.h"
+#include "lib/opus/opus.h"
 */
 import "C"
 import (
