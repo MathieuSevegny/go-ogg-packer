@@ -1,6 +1,7 @@
 package ogg_packer
 
 /*
+#cgo pkg-config: opus ogg
 #cgo darwin CFLAGS: -I./opus
 #include "ogg_opus_packer.h"
 #include "ogg/ogg.h"
@@ -73,9 +74,9 @@ func NewPacker(channelCount uint8, sampleRate uint32) *OggPacker {
 		panic(err.Error())
 	}
 
-	p.StreamFlush()
+	p.streamFlush()
 	p.addTags()
-	p.StreamFlush()
+	p.streamFlush()
 
 	return &p
 }
@@ -179,7 +180,45 @@ func (p *OggPacker) addTags() error {
 	return nil
 }
 
-func (p *OggPacker) StreamFlush() {
+func (p *OggPacker) ReadPages() ([]byte, error) {
+	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
+	defer C.free(unsafe.Pointer(page))
+
+	for {
+		resultCode = C.ogg_stream_pageout(p.StreamState, page)
+		if resultCode == C.int(-1) {
+			panic("ogg read pages failed")
+		}
+		if resultCode == C.int(0) {
+			break
+		}
+
+		p.Buffer.addData(page)
+	}
+
+	return p.Buffer.readData(), nil
+}
+
+func (p *OggPacker) FlushPages() ([]byte, error) {
+	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
+	defer C.free(unsafe.Pointer(page))
+
+	for {
+		resultCode = C.ogg_stream_flush(p.StreamState, page)
+		if resultCode == C.int(-1) {
+			panic("flush pages failed")
+		}
+		if resultCode == C.int(0) {
+			break
+		}
+
+		p.Buffer.addData(page)
+	}
+
+	return p.Buffer.readData(), nil
+}
+
+func (p *OggPacker) streamFlush() {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
@@ -194,7 +233,10 @@ func (p *OggPacker) StreamFlush() {
 
 		p.Buffer.addData(page)
 	}
-	fmt.Println(p.Buffer.Data)
+}
+
+func (p *OggPacker) Close() {
+	// Some optimizer code for destroying objects
 }
 
 func header(channelCount uint8, sampleRate uint32) []byte {
@@ -224,4 +266,10 @@ func (b *Buffer) addData(page *C.ogg_page) {
 	}
 	b.Data = append(b.Data, header...)
 	b.Data = append(b.Data, body...)
+}
+
+func (b *Buffer) readData() []byte {
+	d := b.Data
+	b.Data = make([]byte, 0, initBufferSize)
+	return d
 }
