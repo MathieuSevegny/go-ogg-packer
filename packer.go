@@ -1,10 +1,9 @@
 package packer
 
 /*
-#cgo pkg-config: opus ogg
+#cgo pkg-config: opus
 #cgo darwin CFLAGS: -I./opus
 #include <stdlib.h>
-#include "lib/ogg/ogg.h"
 #include "lib/opus/opus.h"
 */
 import "C"
@@ -13,7 +12,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"runtime"
 	"unsafe"
 
@@ -34,10 +32,8 @@ type Packer struct {
 	sampleRate   uint32
 	packetNo     int64
 	granulePos   int64
-	oggData      bytes.Buffer
+	buffer       bytes.Buffer
 	oggEncoder   *ogg.Encoder
-	oggDecoder   *ogg.Decoder
-	buffer       []byte
 	opusDecoder  *C.OpusDecoder
 }
 
@@ -47,10 +43,8 @@ func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 		sampleRate:   sampleRate,
 		packetNo:     1,
 		granulePos:   0,
-		oggData:      bytes.Buffer{},
-		oggDecoder:   nil,
+		buffer:       bytes.Buffer{},
 		oggEncoder:   nil,
-		buffer:       nil,
 		opusDecoder:  nil,
 	}
 
@@ -94,24 +88,16 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 }
 
 func (p *Packer) ReadPages() ([]byte, error) {
-	if err := p.streamFlush(); err != nil {
-		return nil, fmt.Errorf("stream flush: %w", err)
+	b := p.buffer.Bytes()
+	if len(b) == 0 {
+		return nil, errors.New("received empty ogg data buffer")
 	}
-
-	return p.readBuffer(), nil
-}
-
-func (p *Packer) FlushPages() ([]byte, error) {
-	if err := p.streamFlush(); err != nil {
-		return nil, fmt.Errorf("stream flush: %w", err)
-	}
-
-	return p.readBuffer(), nil
+	p.buffer.Reset()
+	return b, nil
 }
 
 func (p *Packer) init() error {
-	p.oggEncoder = ogg.NewEncoder(serialNo, &p.oggData)
-	p.oggDecoder = ogg.NewDecoder(&p.oggData)
+	p.oggEncoder = ogg.NewEncoder(serialNo, &p.buffer)
 
 	var exitCode C.int
 	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(p.channelCount), &exitCode)
@@ -124,16 +110,8 @@ func (p *Packer) init() error {
 		return fmt.Errorf("add header to ogg stream: %w", err)
 	}
 
-	if err := p.streamFlush(); err != nil {
-		return fmt.Errorf("stream flush: %w", err)
-	}
-
 	if err := p.addTags(); err != nil {
 		return fmt.Errorf("add tags packet: %w", err)
-	}
-
-	if err := p.streamFlush(); err != nil {
-		return fmt.Errorf("stream flush: %w", err)
 	}
 
 	return nil
@@ -159,50 +137,16 @@ func (p *Packer) addTags() error {
 	return nil
 }
 
-func (p *Packer) streamFlush() error {
-	for {
-		page, err := p.oggDecoder.Decode()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("read page from ogg data: %w", err)
-		}
-
-		if err := p.addBuffer(page); err != nil {
-			return fmt.Errorf("add page to buffer: %w", err)
-		}
-	}
-
-	return nil
-}
-
 func (p *Packer) Close() {
 	if p.opusDecoder != nil {
 		C.opus_decoder_destroy(p.opusDecoder)
 		p.opusDecoder = nil
 	}
 
-	// TODO close encoder/decoder
 	p.oggEncoder = nil
-
-	p.buffer = nil
+	p.buffer.Reset()
 
 	runtime.SetFinalizer(&p, nil)
-}
-
-func (p *Packer) addBuffer(page ogg.Page) error {
-	for _, packet := range page.Packets {
-		p.buffer = append(p.buffer, packet...)
-	}
-
-	return nil
-}
-
-func (p *Packer) readBuffer() []byte {
-	b := p.buffer
-	p.buffer = make([]byte, 0, initBufferSize)
-	return b
 }
 
 // sendPacketToOggStream sends data to ogg stream in ogg packet format
