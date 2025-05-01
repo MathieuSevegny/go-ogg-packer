@@ -20,11 +20,8 @@ const (
 	initBufferSize    = 4096
 	maxFrameSize      = 5760
 	defaultSampleRate = 48000
-)
-
-var (
-	successExitCode = C.int(0)
-	errorExitCode   = C.int(-1)
+	successExitCode   = C.int(0)
+	errorExitCode     = C.int(-1)
 )
 
 type Packer struct {
@@ -90,11 +87,6 @@ func (p *Packer) Init() error {
 }
 
 func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
-	eosNumber := 0 // not end of stream
-	if eos {
-		eosNumber = 1 // end of stream
-	}
-
 	bufLen := maxFrameSize * int16(p.ChannelCount) // here should be array as in C sources?
 	cBufLen := C.short(bufLen)
 
@@ -115,48 +107,19 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.SampleRate * uint32(p.ChannelCount)))
 	}
 
-	cData := C.malloc(C.size_t(len(data)))
-	defer C.free(cData)
-
-	ptr := (*[1 << 30]byte)(cData)[:len(data):len(data)]
-	copy(ptr, data)
-
-	var packet C.ogg_packet
-	packet.packet = (*C.uchar)(cData)
-	packet.bytes = C.long(len(data))
-	packet.b_o_s = C.long(0)
-	packet.e_o_s = C.long(eosNumber)
-	packet.granulepos = C.ogg_int64_t(p.GranulePos)
-	packet.packetno = C.ogg_int64_t(p.PacketNo)
-	p.PacketNo++
-	p.GranulePos += int64(numSamplesPerChannel)
-
-	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
-		return errors.New("add packet to ogg stream failed")
+	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
+		return fmt.Errorf("send header data to ogg stream: %w", err)
 	}
+
+	p.GranulePos += int64(numSamplesPerChannel)
 
 	return nil
 }
 
 func (p *Packer) addHeader() error {
 	header := header(p.ChannelCount, p.SampleRate)
-	cHeader := C.malloc(C.size_t(len(header)))
-	defer C.free(cHeader)
-
-	ptr := (*[1 << 30]byte)(cHeader)[:len(header):len(header)]
-	copy(ptr, header)
-
-	var packet C.ogg_packet
-	packet.packet = (*C.uchar)(cHeader)
-	packet.bytes = C.long(len(header))
-	packet.b_o_s = C.long(1) // Beginning of stream
-	packet.e_o_s = C.long(0) // Not end of stream
-	packet.granulepos = C.ogg_int64_t(0)
-	packet.packetno = C.ogg_int64_t(p.PacketNo)
-	p.PacketNo++
-
-	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
-		return errors.New("add packet to ogg stream failed")
+	if err := p.sendPacketToOggStream(header, true, false); err != nil {
+		return fmt.Errorf("send header data to ogg stream: %w", err)
 	}
 
 	return nil
@@ -166,23 +129,8 @@ func (p *Packer) addTags() error {
 	tags := make([]byte, 9)
 	copy(tags, []byte("OpusTags"))
 
-	cTags := C.malloc(C.size_t(len(tags)))
-	defer C.free(cTags)
-
-	ptr := (*[1 << 30]byte)(cTags)[:len(tags):len(tags)]
-	copy(ptr, tags)
-
-	var packet C.ogg_packet
-	packet.packet = (*C.uchar)(cTags)
-	packet.bytes = C.long(len(tags))
-	packet.b_o_s = C.long(0)
-	packet.e_o_s = C.long(0) // Not end of stream
-	packet.granulepos = C.ogg_int64_t(0)
-	packet.packetno = C.ogg_int64_t(p.PacketNo)
-	p.PacketNo++
-
-	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
-		return errors.New("add packet to ogg stream failed")
+	if err := p.sendPacketToOggStream(tags, false, false); err != nil {
+		return fmt.Errorf("send header data to ogg stream: %w", err)
 	}
 
 	return nil
@@ -255,22 +203,6 @@ func (p *Packer) Close() {
 	// Some optimizer code for destroying objects
 }
 
-func header(channelCount uint8, sampleRate uint32) []byte {
-	header := make([]byte, 19)
-	copy(header, []byte("OpusHead"))
-
-	header[8] = 1 // version number
-	header[9] = channelCount
-
-	binary.LittleEndian.PutUint16(header[10:12], 0)
-	binary.LittleEndian.PutUint32(header[12:16], sampleRate)
-	binary.LittleEndian.PutUint16(header[16:18], 0)
-
-	header[18] = 0
-
-	return header
-}
-
 func (p *Packer) addBuffer(page *C.ogg_page) error {
 	var header []byte
 	var body []byte
@@ -296,4 +228,57 @@ func (p *Packer) readBuffer() []byte {
 	b := p.Buffer
 	p.Buffer = make([]byte, 0, initBufferSize)
 	return b
+}
+
+// sendPacketToOggStream sends data to ogg stream in ogg packet format
+// bos - begin of stream flag
+// eos - end of stream flag
+func (p *Packer) sendPacketToOggStream(data []byte, bos bool, eos bool) error {
+	var (
+		bosInt int8
+		eosInt int8
+	)
+	if bos {
+		bosInt = 1
+	}
+	if eos {
+		eosInt = 1
+	}
+
+	cData := C.malloc(C.size_t(len(data)))
+	defer C.free(cData)
+
+	ptr := (*[1 << 30]byte)(cData)[:len(data):len(data)]
+	copy(ptr, data)
+
+	var packet C.ogg_packet
+	packet.packet = (*C.uchar)(cData)
+	packet.bytes = C.long(len(data))
+	packet.b_o_s = C.long(bosInt)
+	packet.e_o_s = C.long(eosInt)
+	packet.granulepos = C.ogg_int64_t(p.GranulePos)
+	packet.packetno = C.ogg_int64_t(p.PacketNo)
+	p.PacketNo++
+
+	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
+		return errors.New("add packet to ogg stream failed")
+	}
+
+	return nil
+}
+
+func header(channelCount uint8, sampleRate uint32) []byte {
+	header := make([]byte, 19)
+	copy(header, []byte("OpusHead"))
+
+	header[8] = 1 // version number
+	header[9] = channelCount
+
+	binary.LittleEndian.PutUint16(header[10:12], 0)
+	binary.LittleEndian.PutUint32(header[12:16], sampleRate)
+	binary.LittleEndian.PutUint16(header[16:18], 0)
+
+	header[18] = 0
+
+	return header
 }
