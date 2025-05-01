@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"runtime"
 	"unsafe"
 )
 
@@ -48,6 +49,8 @@ func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 	if err := p.Init(); err != nil {
 		return nil, fmt.Errorf("init ogg packer: %w", err)
 	}
+
+	runtime.SetFinalizer(&p, (*Packer).Close)
 
 	return &p, nil
 }
@@ -200,7 +203,17 @@ func (p *Packer) streamFlush() error {
 }
 
 func (p *Packer) Close() {
-	// Some optimizer code for destroying objects
+	if p.OpusDecoder != nil {
+		C.opus_decoder_destroy(p.OpusDecoder)
+		p.OpusDecoder = nil
+	}
+
+	C.ogg_stream_clear(p.StreamState)
+	p.StreamState = nil
+
+	p.Buffer = nil
+
+	runtime.SetFinalizer(&p, nil)
 }
 
 func (p *Packer) addBuffer(page *C.ogg_page) error {
