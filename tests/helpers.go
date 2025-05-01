@@ -9,7 +9,6 @@ import (
 )
 
 const sampleRate = 48000
-const channels = 1
 const wavFilePath = "testdata/demo_48k_1ch.wav"
 
 func s16FromWav() []int16 {

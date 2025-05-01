@@ -33,7 +33,9 @@ func TestPacker(t *testing.T) {
 		if end > len(s16) {
 			end = len(s16)
 		}
-		audioBuffer.SendS16Chunk(s16[i:end])
+		if err := audioBuffer.SendS16Chunk(s16[i:end]); err != nil {
+			t.Fatalf("send s16 chunk: %s", err.Error())
+		}
 		i = end
 	}
 

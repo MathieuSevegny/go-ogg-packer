@@ -188,7 +188,7 @@ func (p *Packer) streamFlush() error {
 	for {
 		exitCode := C.ogg_stream_flush(p.StreamState, page)
 		if exitCode == errorExitCode {
-			return errors.New("C-level flush ogg stream failed")
+			return errors.New("c-level flush ogg stream failed")
 		}
 		if exitCode == successExitCode {
 			break
