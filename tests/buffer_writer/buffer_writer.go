@@ -50,11 +50,7 @@ func (s *AudioBufferWriter) GetResult() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read pages: %w", err)
 	}
-	flushedOggPages, err := s.oggPacker.FlushPages()
-	if err != nil {
-		return nil, fmt.Errorf("flush pages: %w", err)
-	}
-	oggPages = append(oggPages, flushedOggPages...)
+
 	s.result = oggPages
 
 	return s.result, nil

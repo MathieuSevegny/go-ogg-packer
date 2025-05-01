@@ -2,4 +2,7 @@ module github.com/paveldroo/go-ogg-packer
 
 go 1.20
 
-require gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302
+require (
+	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302
+	mccoy.space/g/ogg v0.0.0-20221103053400-1ea94e6f3152
+)
