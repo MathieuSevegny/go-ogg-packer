@@ -26,27 +26,27 @@ const (
 )
 
 type Packer struct {
-	ChannelCount uint8
-	SampleRate   uint32
-	PacketNo     int64
-	GranulePos   int64
-	StreamState  *C.ogg_stream_state
-	Buffer       []byte
-	OpusDecoder  *C.OpusDecoder
+	channelCount uint8
+	sampleRate   uint32
+	packetNo     int64
+	granulePos   int64
+	streamState  *C.ogg_stream_state
+	buffer       []byte
+	opusDecoder  *C.OpusDecoder
 }
 
 func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 	p := Packer{
-		ChannelCount: channelCount,
-		SampleRate:   sampleRate,
-		PacketNo:     1,
-		GranulePos:   0,
-		StreamState:  nil,
-		Buffer:       nil,
-		OpusDecoder:  nil,
+		channelCount: channelCount,
+		sampleRate:   sampleRate,
+		packetNo:     1,
+		granulePos:   0,
+		streamState:  nil,
+		buffer:       nil,
+		opusDecoder:  nil,
 	}
 
-	if err := p.Init(); err != nil {
+	if err := p.init(); err != nil {
 		return nil, fmt.Errorf("init ogg packer: %w", err)
 	}
 
@@ -55,18 +55,90 @@ func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 	return &p, nil
 }
 
-func (p *Packer) Init() error {
+func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
+	bufLen := maxFrameSize * int16(p.channelCount) // here should be array as in C sources?
+	cBufLen := C.short(bufLen)
+
+	var numSamplesPerChannel C.int
+	if samplesCount < 0 {
+		numSamplesPerChannel = C.opus_decode(
+			p.opusDecoder,
+			(*C.uchar)(unsafe.Pointer(&data[0])),
+			C.int(len(data)),
+			&cBufLen,
+			maxFrameSize,
+			0,
+		)
+		if numSamplesPerChannel < 0 {
+			return errors.New("count number of sampler per channel failed")
+		}
+	} else {
+		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.sampleRate * uint32(p.channelCount)))
+	}
+
+	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
+		return fmt.Errorf("send header data to ogg stream: %w", err)
+	}
+
+	p.granulePos += int64(numSamplesPerChannel)
+
+	return nil
+}
+
+func (p *Packer) ReadPages() ([]byte, error) {
+	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
+	defer C.free(unsafe.Pointer(page))
+
+	for {
+		exitCode := C.ogg_stream_pageout(p.streamState, page)
+		if exitCode == errorExitCode {
+			return nil, errors.New("read pages from ogg stream failed")
+		}
+		if exitCode == successExitCode {
+			break
+		}
+
+		if err := p.addBuffer(page); err != nil {
+			return nil, fmt.Errorf("add page to buffer: %w", err)
+		}
+	}
+
+	return p.readBuffer(), nil
+}
+
+func (p *Packer) FlushPages() ([]byte, error) {
+	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
+	defer C.free(unsafe.Pointer(page))
+
+	for {
+		exitCode := C.ogg_stream_flush(p.streamState, page)
+		if exitCode == errorExitCode {
+			return nil, errors.New("flush pages from ogg stream failed")
+		}
+		if exitCode == successExitCode {
+			break
+		}
+
+		if err := p.addBuffer(page); err != nil {
+			return nil, fmt.Errorf("add page to buffer: %w", err)
+		}
+	}
+
+	return p.readBuffer(), nil
+}
+
+func (p *Packer) init() error {
 	var streamState C.ogg_stream_state
-	p.StreamState = &streamState
+	p.streamState = &streamState
 
 	var exitCode C.int
-	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(p.ChannelCount), &exitCode)
+	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(p.channelCount), &exitCode)
 	if exitCode == errorExitCode || opusDecoder == nil {
 		return errors.New("create opus decoder failed")
 	}
-	p.OpusDecoder = opusDecoder
+	p.opusDecoder = opusDecoder
 
-	if exitCode := C.ogg_stream_init(p.StreamState, C.int(serialNo)); exitCode == errorExitCode {
+	if exitCode := C.ogg_stream_init(p.streamState, C.int(serialNo)); exitCode == errorExitCode {
 		return errors.New("ogg stream init failed")
 	}
 
@@ -89,38 +161,8 @@ func (p *Packer) Init() error {
 	return nil
 }
 
-func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
-	bufLen := maxFrameSize * int16(p.ChannelCount) // here should be array as in C sources?
-	cBufLen := C.short(bufLen)
-
-	var numSamplesPerChannel C.int
-	if samplesCount < 0 {
-		numSamplesPerChannel = C.opus_decode(
-			p.OpusDecoder,
-			(*C.uchar)(unsafe.Pointer(&data[0])),
-			C.int(len(data)),
-			&cBufLen,
-			maxFrameSize,
-			0,
-		)
-		if numSamplesPerChannel < 0 {
-			return errors.New("count number of sampler per channel failed")
-		}
-	} else {
-		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.SampleRate * uint32(p.ChannelCount)))
-	}
-
-	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
-		return fmt.Errorf("send header data to ogg stream: %w", err)
-	}
-
-	p.GranulePos += int64(numSamplesPerChannel)
-
-	return nil
-}
-
 func (p *Packer) addHeader() error {
-	header := header(p.ChannelCount, p.SampleRate)
+	header := header(p.channelCount, p.sampleRate)
 	if err := p.sendPacketToOggStream(header, true, false); err != nil {
 		return fmt.Errorf("send header data to ogg stream: %w", err)
 	}
@@ -139,54 +181,12 @@ func (p *Packer) addTags() error {
 	return nil
 }
 
-func (p *Packer) ReadPages() ([]byte, error) {
-	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
-	defer C.free(unsafe.Pointer(page))
-
-	for {
-		exitCode := C.ogg_stream_pageout(p.StreamState, page)
-		if exitCode == errorExitCode {
-			return nil, errors.New("read pages from ogg stream failed")
-		}
-		if exitCode == successExitCode {
-			break
-		}
-
-		if err := p.addBuffer(page); err != nil {
-			return nil, fmt.Errorf("add page to buffer: %w", err)
-		}
-	}
-
-	return p.readBuffer(), nil
-}
-
-func (p *Packer) FlushPages() ([]byte, error) {
-	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
-	defer C.free(unsafe.Pointer(page))
-
-	for {
-		exitCode := C.ogg_stream_flush(p.StreamState, page)
-		if exitCode == errorExitCode {
-			return nil, errors.New("flush pages from ogg stream failed")
-		}
-		if exitCode == successExitCode {
-			break
-		}
-
-		if err := p.addBuffer(page); err != nil {
-			return nil, fmt.Errorf("add page to buffer: %w", err)
-		}
-	}
-
-	return p.readBuffer(), nil
-}
-
 func (p *Packer) streamFlush() error {
 	page := (*C.ogg_page)(C.malloc(C.sizeof_ogg_page))
 	defer C.free(unsafe.Pointer(page))
 
 	for {
-		exitCode := C.ogg_stream_flush(p.StreamState, page)
+		exitCode := C.ogg_stream_flush(p.streamState, page)
 		if exitCode == errorExitCode {
 			return errors.New("c-level flush ogg stream failed")
 		}
@@ -203,15 +203,15 @@ func (p *Packer) streamFlush() error {
 }
 
 func (p *Packer) Close() {
-	if p.OpusDecoder != nil {
-		C.opus_decoder_destroy(p.OpusDecoder)
-		p.OpusDecoder = nil
+	if p.opusDecoder != nil {
+		C.opus_decoder_destroy(p.opusDecoder)
+		p.opusDecoder = nil
 	}
 
-	C.ogg_stream_clear(p.StreamState)
-	p.StreamState = nil
+	C.ogg_stream_clear(p.streamState)
+	p.streamState = nil
 
-	p.Buffer = nil
+	p.buffer = nil
 
 	runtime.SetFinalizer(&p, nil)
 }
@@ -225,21 +225,21 @@ func (p *Packer) addBuffer(page *C.ogg_page) error {
 	}
 
 	header = C.GoBytes(unsafe.Pointer(page.header), C.int(page.header_len))
-	p.Buffer = append(p.Buffer, header...)
+	p.buffer = append(p.buffer, header...)
 
 	if page.body_len == 0 {
 		return errors.New("body length should be > 0")
 	}
 
 	body = C.GoBytes(unsafe.Pointer(page.body), C.int(page.body_len))
-	p.Buffer = append(p.Buffer, body...)
+	p.buffer = append(p.buffer, body...)
 
 	return nil
 }
 
 func (p *Packer) readBuffer() []byte {
-	b := p.Buffer
-	p.Buffer = make([]byte, 0, initBufferSize)
+	b := p.buffer
+	p.buffer = make([]byte, 0, initBufferSize)
 	return b
 }
 
@@ -269,11 +269,11 @@ func (p *Packer) sendPacketToOggStream(data []byte, bos bool, eos bool) error {
 	packet.bytes = C.long(len(data))
 	packet.b_o_s = C.long(bosInt)
 	packet.e_o_s = C.long(eosInt)
-	packet.granulepos = C.ogg_int64_t(p.GranulePos)
-	packet.packetno = C.ogg_int64_t(p.PacketNo)
-	p.PacketNo++
+	packet.granulepos = C.ogg_int64_t(p.granulePos)
+	packet.packetno = C.ogg_int64_t(p.packetNo)
+	p.packetNo++
 
-	if exitCode := C.ogg_stream_packetin(p.StreamState, &packet); exitCode == errorExitCode {
+	if exitCode := C.ogg_stream_packetin(p.streamState, &packet); exitCode == errorExitCode {
 		return errors.New("add packet to ogg stream failed")
 	}
 
