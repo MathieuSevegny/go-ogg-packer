@@ -158,7 +158,6 @@ func (p *Packer) sendPacketToOggStream(data []byte, bos bool, eos bool) error {
 			return fmt.Errorf("write begin of stream packets to ogg stream: %w", err)
 		}
 		return nil
-
 	}
 	if eos {
 		if err := p.oggEncoder.EncodeEOS(p.granulePos, [][]byte{data}); err != nil {
