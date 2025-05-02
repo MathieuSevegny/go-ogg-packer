@@ -7,6 +7,6 @@ Project plan:
 - [x] Add better error handling, split `packer` package to several files/packages
 - [x] Check linters
 - [x] Remove C ogg lib dependency
-- [ ] Remove C opus lib dependency
+- [x] Remove direct C opus lib dependency
 - [ ] Check lib layout with peers
 - [ ] Production-ready release 1.0
