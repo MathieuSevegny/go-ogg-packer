@@ -1,20 +1,13 @@
 package packer
 
-/*
-#cgo pkg-config: opus
-#cgo darwin CFLAGS: -I./opus
-#include <stdlib.h>
-#include "lib/opus/opus.h"
-*/
-import "C"
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"runtime"
-	"unsafe"
 
+	opus "gopkg.in/hraban/opus.v2"
 	"mccoy.space/g/ogg"
 )
 
@@ -23,8 +16,6 @@ const (
 	initBufferSize    = 4096
 	maxFrameSize      = 5760
 	defaultSampleRate = 48000
-	successExitCode   = C.int(0)
-	errorExitCode     = C.int(-1)
 )
 
 type Packer struct {
@@ -34,7 +25,7 @@ type Packer struct {
 	granulePos   int64
 	buffer       bytes.Buffer
 	oggEncoder   *ogg.Encoder
-	opusDecoder  *C.OpusDecoder
+	opusDecoder  *opus.Decoder
 }
 
 func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
@@ -58,24 +49,10 @@ func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 }
 
 func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
-	bufLen := maxFrameSize * int16(p.channelCount) // here should be array as in C sources?
-	cBufLen := C.short(bufLen)
-
-	var numSamplesPerChannel C.int
-	if samplesCount < 0 {
-		numSamplesPerChannel = C.opus_decode(
-			p.opusDecoder,
-			(*C.uchar)(unsafe.Pointer(&data[0])),
-			C.int(len(data)),
-			&cBufLen,
-			maxFrameSize,
-			0,
-		)
-		if numSamplesPerChannel < 0 {
-			return errors.New("count number of sampler per channel failed")
-		}
-	} else {
-		numSamplesPerChannel = C.int(uint32(samplesCount*defaultSampleRate) / (p.sampleRate * uint32(p.channelCount)))
+	buf := make([]int16, maxFrameSize*int16(p.channelCount))
+	numSamplesPerChannel, err := p.opusDecoder.Decode(data, buf)
+	if err != nil {
+		return fmt.Errorf("decode chunk data with opus decoder: %w", err)
 	}
 
 	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
@@ -99,12 +76,11 @@ func (p *Packer) ReadPages() ([]byte, error) {
 func (p *Packer) init() error {
 	p.oggEncoder = ogg.NewEncoder(serialNo, &p.buffer)
 
-	var exitCode C.int
-	opusDecoder := C.opus_decoder_create(C.int(defaultSampleRate), C.int(p.channelCount), &exitCode)
-	if exitCode == errorExitCode || opusDecoder == nil {
-		return errors.New("create opus decoder failed")
+	d, err := opus.NewDecoder(defaultSampleRate, int(p.channelCount))
+	if err != nil {
+		return fmt.Errorf("create opus decoder: %w", err)
 	}
-	p.opusDecoder = opusDecoder
+	p.opusDecoder = d
 
 	if err := p.addHeader(); err != nil {
 		return fmt.Errorf("add header to ogg stream: %w", err)
@@ -138,11 +114,7 @@ func (p *Packer) addTags() error {
 }
 
 func (p *Packer) Close() {
-	if p.opusDecoder != nil {
-		C.opus_decoder_destroy(p.opusDecoder)
-		p.opusDecoder = nil
-	}
-
+	p.opusDecoder = nil
 	p.oggEncoder = nil
 	p.buffer.Reset()
 
