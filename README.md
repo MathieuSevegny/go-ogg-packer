@@ -1,5 +1,5 @@
 # go-ogg-packer
-Pack your opus, alaw, linear16 data into ogg container using Go
+Pack your opus data into ogg container chunk-by-chunk using Go
 
 Project plan:
 - [x] Use AudioBufferWriter wrapper for CGo ogg_packer to get green tests before implementing native Go code
