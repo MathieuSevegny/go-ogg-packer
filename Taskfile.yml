@@ -2,16 +2,10 @@ version: "3"
 
 dotenv: ['.env']
 
-env:
-  # Mac homebrew paths for C-libs linking for both Apple Silicon and Intel archs
-  CGO_CPPFLAGS: "-I/opt/homebrew/include -I/usr/local/include"
-  LIBRARY_PATH: "/opt/homebrew/lib:/usr/local/lib"
-
 tasks:
   install-mac-deps:
     desc: Install external dependencies for macOS
     cmds:
-      - brew install libogg
       - brew install opus
 
   install-linux-deps:
