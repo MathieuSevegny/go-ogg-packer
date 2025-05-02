@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"runtime"
 
+	ogg "github.com/paveldroo/go-ogg-packer/internal"
 	opus "gopkg.in/hraban/opus.v2"
-	"mccoy.space/g/ogg"
 )
 
 const (
