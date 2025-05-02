@@ -8,6 +8,6 @@ Project plan:
 - [x] Check linters
 - [x] Remove C ogg lib dependency
 - [x] Remove direct C opus lib dependency
-- [ ] Add ogg encoder to codebase, eliminate unmaintained dependency
+- [x] Add ogg encoder to codebase, eliminate unmaintained dependency
 - [ ] Check lib layout with peers
 - [ ] Production-ready release 1.0
