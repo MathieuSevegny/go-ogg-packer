@@ -1,17 +1,20 @@
 package writer
 
 import (
+	"encoding/gob"
 	"fmt"
+	"os"
 
 	packer "github.com/paveldroo/go-ogg-packer"
-	"github.com/paveldroo/go-ogg-packer/tests/buffer_writer/opus_tools"
+	"github.com/paveldroo/go-ogg-packer/examples/wav/buffer_writer/opus_tools"
 )
 
 type AudioBufferWriter struct {
-	result        []byte
-	opusConverter *opus_tools.Converter
-	oggPacker     *packer.Packer
-	lastS16Buffer []int16
+	result         []byte
+	opusConverter  *opus_tools.Converter
+	oggPacker      *packer.Packer
+	lastS16Buffer  []int16
+	allOpusPackets [][]byte
 }
 
 func NewAudioBuffer(
@@ -30,6 +33,8 @@ func (s *AudioBufferWriter) SendS16Chunk(chunk []int16) error {
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
+	s.allOpusPackets = append(s.allOpusPackets, currentOpusPackets...)
+
 	s.lastS16Buffer = s.lastS16Buffer[pos:]
 	for _, opusPacket := range currentOpusPackets {
 		if err := s.oggPacker.AddChunk(opusPacket, false, pos); err != nil {
@@ -69,11 +74,25 @@ func (s *AudioBufferWriter) flushLastS16Buffer() error {
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
+	s.allOpusPackets = append(s.allOpusPackets, opusPackets...)
+
 	for _, opusPacket := range opusPackets {
 		if err := s.oggPacker.AddChunk(opusPacket, false, -1); err != nil {
 			return fmt.Errorf("add chunk: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func saveSlicesForTests(data [][]byte) error {
+	f, err := os.Create("48k_1ch.opus_raw")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	encoder := gob.NewEncoder(f)
+	encoder.Encode(data)
 	return nil
 }
