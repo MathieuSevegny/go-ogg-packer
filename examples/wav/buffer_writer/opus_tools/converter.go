@@ -1,25 +1,25 @@
 package opus_tools
 
 import (
+	"fmt"
+
 	"gopkg.in/hraban/opus.v2"
 )
 
-// Caution: Do not use opus.Converter with multiple audio streams to avoid sound artifacts.
-
 type Converter struct {
 	config           *Config
-	encoder          *encoderWrapper
+	encoder          *opus.Encoder
 	frameSizeSamples int
 }
 
 func NewOpusConverter(config *Config) (*Converter, error) {
-	encoder, err := newEncoderWrapper(config.SampleRate, config.NumChannels, opus.AppAudio)
+	encoder, err := opus.NewEncoder(config.SampleRate, config.NumChannels, opus.AppAudio)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create encoder: %w", err)
 	}
 
 	frameSizeMillis := config.FrameSize.Milliseconds()
-	frameSizeSamples := float32(int64(config.NumChannels*config.SampleRate)*frameSizeMillis) / 1000 //nolint:mnd // millis -> seconds
+	frameSizeSamples := float32(int64(config.NumChannels*config.SampleRate)*frameSizeMillis) / 1000
 
 	return &Converter{
 		encoder:          encoder,
@@ -32,8 +32,9 @@ func (converter *Converter) EncodeOneChunk(samplesChunk []int16) ([]byte, error)
 	if len(samplesChunk) < converter.frameSizeSamples {
 		return []byte{}, nil
 	}
-	oneOpusPacket := make([]byte, converter.config.BufferSize)
-	n, err := converter.encoder.encode(samplesChunk[:converter.frameSizeSamples], oneOpusPacket)
+	bufferSize := converter.frameSizeSamples * 4
+	oneOpusPacket := make([]byte, bufferSize)
+	n, err := converter.encoder.Encode(samplesChunk[:converter.frameSizeSamples], oneOpusPacket)
 	if err != nil {
 		return nil, err
 	}

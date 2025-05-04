@@ -14,18 +14,16 @@ import (
 	"github.com/paveldroo/go-ogg-packer/examples/wav/buffer_writer/opus_tools"
 )
 
-const (
-	sampleRate  = 48000
-	wavFilePath = "48k_1ch.wav"
-)
+const wavFilePath = "48k_1ch.wav"
 
 func main() {
-	converter, err := opus_tools.NewOpusConverter(opus_tools.NewDefaultConfig())
+	cfg := opus_tools.NewDefaultConfig()
+	converter, err := opus_tools.NewOpusConverter(cfg)
 	if err != nil {
 		log.Fatalf("create opus converter: %s", err.Error())
 	}
 
-	packer, err := packer.New(1, sampleRate)
+	packer, err := packer.New(uint8(cfg.NumChannels), uint32(cfg.SampleRate))
 	if err != nil {
 		log.Fatalf("create ogg packer: %s", err.Error())
 	}
