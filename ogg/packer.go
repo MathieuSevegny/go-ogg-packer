@@ -171,10 +171,34 @@ func header(channelCount uint8, sampleRate uint32) []byte {
 // a simple identifier and the duration in nanoseconds (little-endian).
 // The returned byte slice can be used as a packet payload in an Ogg stream.
 func CreateSkeletonTrack(d time.Duration) []byte {
+	// Layout: 80 bytes total as specified in the provided diagram.
+	// Identifier 'fishead\0' (8 bytes), followed by version fields,
+	// presentation time numerator/denominator, basetime fields, UTC,
+	// reserved space, then segment length and content byte offset.
 	const prefix = "fishead"
-	b := make([]byte, len(prefix)+8)
+	b := make([]byte, 80)
 	copy(b, []byte(prefix))
-	binary.LittleEndian.PutUint64(b[len(prefix):], uint64(d.Nanoseconds()))
+
+	// Ensure null termination at byte 7 (copy leaves it zero if prefix is 7 bytes)
+
+	// Version major (uint16) and version minor (uint16) at bytes 8-11
+	binary.LittleEndian.PutUint16(b[8:10], 1)  // major
+	binary.LittleEndian.PutUint16(b[10:12], 0) // minor
+
+	// Presentation time: store as 32-bit numerator/denominator in
+	// little-endian (use microseconds to avoid overflowing 32-bit).
+	binary.LittleEndian.PutUint32(b[12:16], uint32(d.Microseconds()))
+	// bytes 16-19 left zero per layout
+	binary.LittleEndian.PutUint32(b[20:24], uint32(1000000))
+
+	// Basetime numerator/denominator left as zero at 28-35 and 36-43
+
+	// UTC (seconds since epoch) as 32-bit at bytes 44-47
+	binary.LittleEndian.PutUint32(b[44:48], uint32(time.Now().Unix()))
+
+	// Segment length in bytes at 64-67 (leave 0)
+	// Content byte offset at 72-75 (leave 0)
+
 	return b
 }
 
