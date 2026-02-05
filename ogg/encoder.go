@@ -6,8 +6,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"math/rand"
-	"time"
 )
 
 // An Encoder encodes raw bytes into an ogg stream.
@@ -72,7 +70,7 @@ func (w *Encoder) writePackets(kind byte, granule int64, packets [][]byte) error
 	h := pageHeader{
 		OggS:       [4]byte{'O', 'g', 'g', 'S'},
 		HeaderType: kind,
-		Serial:     uint32(rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()),
+		Serial:     w.serial,
 		Granule:    granule,
 	}
 
