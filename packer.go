@@ -79,16 +79,12 @@ func (s *Packer) flushPCMBuffer() error {
 		return fmt.Errorf("encode: %w", err)
 	}
 
-	for _, opusPacket := range opusPackets {
-		if err := s.oggPacker.AddChunk(opusPacket, false, -1); err != nil {
+	lastIdx := len(opusPackets) - 1
+	for i, opusPacket := range opusPackets {
+		eos := i == lastIdx
+		if err := s.oggPacker.AddChunk(opusPacket, eos, -1); err != nil {
 			return fmt.Errorf("add chunk: %w", err)
 		}
-	}
-
-	// Write a zero-length EOS packet so the ogg stream is properly terminated
-	// without altering the actual audio packets or their framing.
-	if err := s.oggPacker.AddChunk([]byte{}, true, 0); err != nil {
-		return fmt.Errorf("add eos packet: %w", err)
 	}
 
 	return nil
