@@ -85,5 +85,11 @@ func (s *Packer) flushPCMBuffer() error {
 		}
 	}
 
+	// Write a zero-length EOS packet so the ogg stream is properly terminated
+	// without altering the actual audio packets or their framing.
+	if err := s.oggPacker.AddChunk([]byte{}, true, 0); err != nil {
+		return fmt.Errorf("add eos packet: %w", err)
+	}
+
 	return nil
 }

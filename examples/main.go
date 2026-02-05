@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"time"
 
 	packer "github.com/paveldroo/go-ogg-packer"
 )
@@ -37,7 +36,7 @@ func main() {
 		log.Fatalf("get result from packer: %s", err.Error())
 	}
 
-	fname := fmt.Sprintf("examples/packer_result_%d.ogg", time.Now().UnixNano())
+	fname := fmt.Sprintf("examples/packer_result.ogg")
 	if err := writeOggFile(fname, audioContent); err != nil {
 		log.Fatalf("write ogg file: %s", err.Error())
 	}
