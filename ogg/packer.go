@@ -47,10 +47,6 @@ func New(channelCount uint8, sampleRate uint32) (*Packer, error) {
 }
 
 func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
-	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
-		return fmt.Errorf("send header data to ogg stream: %w", err)
-	}
-
 	var numSamplesPerChannel int
 	if samplesCount < 0 {
 		var err error
@@ -61,10 +57,14 @@ func (p *Packer) AddChunk(data []byte, eos bool, samplesCount int) error {
 			return fmt.Errorf("decode chunk data with opus decoder: %w", err)
 		}
 	} else {
-		numSamplesPerChannel = int(samplesCount*int(p.sampleRate)) / (int(p.sampleRate) * int(p.channelCount))
+		numSamplesPerChannel = int(samplesCount) / int(p.channelCount)
 	}
 
 	p.granulePos += int64(numSamplesPerChannel)
+
+	if err := p.sendPacketToOggStream(data, false, eos); err != nil {
+		return fmt.Errorf("send header data to ogg stream: %w", err)
+	}
 
 	return nil
 }
