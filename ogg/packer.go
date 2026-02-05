@@ -5,13 +5,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/rand"
 	"runtime"
+	"time"
 
 	opus "gopkg.in/hraban/opus.v2"
 )
 
 const (
-	serialNo       = 99999 // const for testing similarity in active development phase. Should be `rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()` in real world.
+	//serialNo       = 99999 // const for testing similarity in active development phase. Should be `rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()` in real world
 	initBufferSize = 4096
 	maxFrameSize   = 5760
 )
@@ -79,7 +81,8 @@ func (p *Packer) ReadPages() ([]byte, error) {
 }
 
 func (p *Packer) init() error {
-	p.oggEncoder = NewEncoder(serialNo, &p.buffer)
+	serialNumber := rand.New(rand.NewSource(time.Now().UTC().Unix() % 0x80000000)).Int31()
+	p.oggEncoder = NewEncoder(uint32(serialNumber), &p.buffer)
 
 	d, err := opus.NewDecoder(int(p.sampleRate), int(p.channelCount))
 	if err != nil {
