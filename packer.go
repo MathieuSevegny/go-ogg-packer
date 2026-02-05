@@ -79,13 +79,9 @@ func (s *Packer) flushPCMBuffer() error {
 		return fmt.Errorf("encode: %w", err)
 	}
 
-	if len(opusPackets) > 0 {
-		lastIndex := len(opusPackets) - 1
-		for i, opusPacket := range opusPackets {
-			eos := i == lastIndex
-			if err := s.oggPacker.AddChunk(opusPacket, eos, -1); err != nil {
-				return fmt.Errorf("add chunk: %w", err)
-			}
+	for _, opusPacket := range opusPackets {
+		if err := s.oggPacker.AddChunk(opusPacket, false, -1); err != nil {
+			return fmt.Errorf("add chunk: %w", err)
 		}
 	}
 
