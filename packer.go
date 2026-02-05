@@ -55,6 +55,18 @@ func (s *Packer) GetResult() ([]byte, error) {
 		return nil, fmt.Errorf("flush buffer: %w", err)
 	}
 
+	// Insert a skeleton track packet with the total duration before finalizing.
+	if dur := s.oggPacker.Duration(); dur > 0 {
+		if err := s.oggPacker.AddSkeleton(dur); err != nil {
+			return nil, fmt.Errorf("add skeleton packet: %w", err)
+		}
+	}
+
+	// Now write EOS for the stream (use an empty packet with samplesCount=0).
+	if err := s.oggPacker.AddChunk([]byte{}, true, 0); err != nil {
+		return nil, fmt.Errorf("write eos packet: %w", err)
+	}
+
 	oggPages, err := s.oggPacker.ReadPages()
 	if err != nil {
 		return nil, fmt.Errorf("read pages: %w", err)
@@ -79,10 +91,8 @@ func (s *Packer) flushPCMBuffer() error {
 		return fmt.Errorf("encode: %w", err)
 	}
 
-	lastIdx := len(opusPackets) - 1
-	for i, opusPacket := range opusPackets {
-		eos := i == lastIdx
-		if err := s.oggPacker.AddChunk(opusPacket, eos, -1); err != nil {
+	for _, opusPacket := range opusPackets {
+		if err := s.oggPacker.AddChunk(opusPacket, false, -1); err != nil {
 			return fmt.Errorf("add chunk: %w", err)
 		}
 	}

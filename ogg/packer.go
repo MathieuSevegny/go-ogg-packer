@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"time"
 
 	opus "gopkg.in/hraban/opus.v2"
 )
@@ -164,4 +165,33 @@ func header(channelCount uint8, sampleRate uint32) []byte {
 	header[18] = 0
 
 	return header
+}
+
+// CreateSkeletonTrack builds a minimal skeleton-style packet containing
+// a simple identifier and the duration in nanoseconds (little-endian).
+// The returned byte slice can be used as a packet payload in an Ogg stream.
+func CreateSkeletonTrack(d time.Duration) []byte {
+	const prefix = "fishead"
+	b := make([]byte, len(prefix)+8)
+	copy(b, []byte(prefix))
+	binary.LittleEndian.PutUint64(b[len(prefix):], uint64(d.Nanoseconds()))
+	return b
+}
+
+// Duration returns the duration of the audio accumulated in the packer.
+func (p *Packer) Duration() time.Duration {
+	if p.sampleRate == 0 {
+		return 0
+	}
+	return time.Duration(p.granulePos) * time.Second / time.Duration(p.sampleRate)
+}
+
+// AddSkeleton creates a skeleton packet for the provided duration and
+// inserts it into the ogg stream as a regular packet.
+func (p *Packer) AddSkeleton(d time.Duration) error {
+	pkt := CreateSkeletonTrack(d)
+	if err := p.sendPacketToOggStream(pkt, false, false); err != nil {
+		return fmt.Errorf("send skeleton packet to ogg stream: %w", err)
+	}
+	return nil
 }
